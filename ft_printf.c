@@ -173,8 +173,14 @@ int ft_strlen(char *str)
 
 int ft_adjust_flags(char *str, t_print *rules, char type)
 {
+    if (rules->flag.zero != -1 && rules->flag.prec != -1 && (type == 'd' || type == 'i' || type == 'u' || type == 'x' || type == 'X' || type == 'p'))
+        rules->flag.zero = -1;
+    if (rules->flag.minus != -1 && rules->flag.zero != -1)
+        rules->flag.zero == -1;
     if (rules->flag.prec == -1)
         rules->flag.prec = ft_strlen(str);
+    if (rules->flag.width <= ft_strlen(str))
+        rules->flag.width = 0;
     if (rules->flag.prec >= ft_strlen(str) && (type == 's' || type == 'c'))
         rules->flag.prec = ft_strlen(str);
     else if (rules->flag.prec >= ft_strlen(str)
@@ -183,9 +189,15 @@ int ft_adjust_flags(char *str, t_print *rules, char type)
         rules->flag.prec_nb = rules->flag.prec;
         rules->flag.prec = -1;
     }
+    else if (rules->flag.prec < ft_strlen(str)
+    && (type == 'd' || type == 'i' || type == 'u' || type == 'x' || type == 'X' || type == 'p'))
+    {
+        rules->flag.prec_nb = ft_strlen(str);
+        rules->flag.prec = -1;
+    }
     if (rules->flag.width > ft_strlen(str) && rules->flag.prec_nb != -1)
         rules->flag.width = rules->flag.width - rules->flag.prec_nb;
-    else if (rules->flag.width > ft_strlen(str))
+    else if (rules->flag.width > ft_strlen(str) && rules->flag.prec != -1)
         rules->flag.width = rules->flag.width - rules->flag.prec;
 }
 
@@ -213,10 +225,15 @@ int ft_putstr_revised(char *str, t_print *rules, char type)
     j = 0;
     res = 0;
     ft_adjust_flags(str, rules, type);
-    while (rules->flag.minus == -1 && rules->flag.zero == -1 && rules->flag.width != -1 && i < rules->flag.width)
+    while (rules->flag.minus == -1 && rules->flag.zero == -1 && rules->flag.width > 0 && i < rules->flag.width)
     {
         rules->ret += write(1, " ", sizeof(char));
         i++;
+    }
+    if (str[0] == '-' && (type == 'd' || type == 'u' || type == 'i'))
+    {
+        write(1, "-", sizeof(char));
+        j++;
     }
     while (rules->flag.minus == -1 && rules->flag.prec_nb != -1 && i < rules->flag.prec_nb - ft_strlen(str))
     {
@@ -253,11 +270,6 @@ int ft_putchar_revised(char c, t_print *rules, char type)
     while (rules->flag.minus == -1 && rules->flag.zero == -1 && rules->flag.width != -1 && i < rules->flag.width)
     {
         rules->ret += write(1, " ", sizeof(char));
-        i++;
-    }
-    while (rules->flag.minus == -1 && rules->flag.zero && rules->flag.width != -1 && i < rules->flag.width)
-    {
-        rules->ret += write(1, "0", sizeof(char));
         i++;
     }
     while (rules->flag.minus == -1 && rules->flag.prec_nb != -1 && i < rules->flag.prec_nb - 1)
@@ -388,15 +400,12 @@ char *ft_itoa_u(unsigned int n)
 
 int ft_isvalue(char *string, int count, t_print *rules, va_list args)
 {
+    if (ft_isdigit(string[count]))
+       return (1);
     if (ft_is_flag(string[count]))
         return (1);
-    if (ft_is_conv(string[count]))
+    else if (ft_is_conv(string[count]))
         return (2);
-    else if (ft_isdigit(string[count]))
-     {
-       rules->flag.width = ft_atoi_revised(string);
-       return (1);
-     }
     return (0);
 }
 
@@ -444,10 +453,12 @@ int ft_record_flags(char *string, int count, t_print *rules, va_list args)
 {
     int index;
     int tmp;
+    int bool;
 
     count++;
     tmp = count;
     index = 0;
+    bool = 0;
     if (string[count])
     {
 //        printf("B");
@@ -456,31 +467,40 @@ int ft_record_flags(char *string, int count, t_print *rules, va_list args)
 //        printf("strcountindex %c\n", string[count + index]);
         if (ft_isvalue(string, count + index, rules, args) == 2)
         {
-            while (ft_isvalue(string, count, rules, args) == 1)
+            while (string[count] == '0' || string[count] == '-')
             {
-                if (string[count] == '*')
-                    rules->flag.width = va_arg(args, int);
-                if (string[count] == '.' && string[count + 1] != '*')
+                if (string[count] == '-')
+                    rules->flag.minus = 1;
+                if (string[count] == '0')
+                    rules->flag.zero = 1;
+                count++;
+            }
+            if (string[count] == '*')
+            {
+                rules->flag.width = va_arg(args, int);
+                    count++;
+            }
+            if (ft_isdigit(string[count]))
+                {
+                    rules->flag.width = ft_atoi_revised(&string[count]);
+                    count += ft_strlen(ft_itoa(rules->flag.width));
+//                    printf("rules flag width %d\n", rules->flag.width);
+                }
+            if (string[count] == '.' && ft_isdigit(string[count + 1]))
                 {
                     rules->flag.prec = ft_atoi_revised(&string[count + 1]);
-                    while (ft_isdigit(string[count + 1]))
-//                        printf("a");
-                        count++;
+                    count += ft_strlen(ft_itoa(rules->flag.prec));
                 }
-                if (string[count] == '.' && string[count + 1] == '*')
+            if (string[count] == '.' && string[count + 1] == '*')
                 {
                     rules->flag.prec = va_arg(args, int);
                     count++;
                 }
-                if (string[count] == '-')
-                    rules->flag.minus = 1;
-                if (string[count] == '0' && string[count + 1] != '-')
-                    rules->flag.zero = 1;
-                count++;
             }
             return (count);
         }
-        return (index);
+        rules->conv.bool_x = 1;
+        return (-1);
     }
     return (-1);
 }
@@ -496,20 +516,25 @@ int ft_parse(char *string, int i, t_print *rules, va_list args)
     while (count < ft_strlen(string) && tmp < ft_strlen(string))
     {
 //       printf("strcount %c\n", string[count]);
-        if (string[count] == '%' && (tmp = ft_record_flags(string, count, rules, args)) > -1)
+        if (string[count] == '%' && string[count + 1] == '%')
+        {
+            write(1, "%", sizeof(char));
+            count++;
+        }
+        else if (string[count] == '%' && (tmp = ft_record_flags(string, count, rules, args)) > -1)
         {
             ft_write_arg(string, tmp, rules, args);
             count = (tmp) ? tmp + 1 : count;
+            init_structs(rules);
         }
         else
         {
-//            printf("a");
             write(1, &string[count], sizeof(char));
             rules->ret++;
             count++;
         }
-        init_structs(rules);
         tmp = -1;
+        rules->conv.bool_x = 0;
 //        printf("tmp - %d\n", tmp);
 //        count = (tmp != -1) ? tmp + 1 : ++count;
 //        printf("count %d\n", count);
